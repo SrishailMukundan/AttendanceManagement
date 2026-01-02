@@ -116,7 +116,6 @@ def print_tardy(student, absence):
         draw.text((100, 135), date_str, font=font, fill=0)
         draw.text((385, 135), time_str, font=font, fill=0)
         line_y = 140 if is_am else 160
-
         draw.line((460, line_y, 485, line_y), fill=0, width=3)
         if absence == "excused": draw.text((25, 320), "✓", font=font, fill=0)
         else: draw.text((25, 340), "✓", font=font, fill=0)
@@ -217,7 +216,6 @@ def update_display():
             draw.text((15, 15), msg, fill=255, font=font_large)
             bv = (math.sin(time.time() * 8) + 1) * 50
             draw_loading_bar(draw, 14, 40, 100, 8, bv)
-
 # ------------------------
 # Main Loop
 # ------------------------
@@ -225,10 +223,12 @@ update_display()
 try:
     while True:
         now = time.time()
+        # Back Button
         if not GPIO.input(BTN_BACK):
             current_state = "HOME"; menu_index = -1; card_id = None; update_display()
             time.sleep(0.3); continue
 
+        # Next Button / Auto-Select
         if not GPIO.input(BTN_NEXT):
             if current_state in ["HOME", "SETUP_MENU", "SCAN_MENU", "FINGER_SETUP", "CONFIRM_CLEAR", "ABSENCE_MENU"]:    
                 max_opts = 3 if current_state == "ABSENCE_MENU" else 2
@@ -257,16 +257,18 @@ try:
                 elif menu_index == 1: print_tardy(selected_student, "unexcused"); status = "Unexcused"
                 elif menu_index == 2: status = "Neither"
                 log_entry("RFID", card_id, selected_student["name"], selected_student["grade"], status)
-                current_state = "HOME"
+                current_state = "RFID_WAIT" # Go back to scanning mode
             menu_index = -1; update_display()
 
+        # RFID Logic (Wait States)
         if current_state in ["RFID_WAIT", "RFID_WAIT_SETUP"]:
+            update_display() # This makes the loading bar move for RFID
             try:
                 cid = card_queue.get_nowait()
                 if current_state == "RFID_WAIT_SETUP":
                     rfid_ws.append_row([str(cid)])
                     with canvas(device) as draw: draw.text((10, 25), "STORED", fill=255)
-                    time.sleep(1.5); current_state = "HOME"
+                    time.sleep(1.5); current_state = "SETUP_MENU"
                 else:
                     all_ids = rfid_ws.col_values(1)
                     if str(cid) in all_ids:
@@ -276,11 +278,13 @@ try:
                         current_state = "ABSENCE_MENU"; menu_index = -1
                     else:
                         with canvas(device) as draw: draw.text((10, 25), "UNKNOWN", fill=255)
-                        time.sleep(1.5); current_state = "HOME"
+                        time.sleep(1.5); current_state = "RFID_WAIT"
                 update_display()
             except queue.Empty: pass
 
+        # Fingerprint Logic (Wait State)
         if current_state == "FINGER_WAIT":
+            update_display() # Keep loading bar moving
             if finger.get_image() == OK and finger.image_2_tz(1) == OK:
                 if finger.finger_search() == OK:
                     all_f = finger_ws.col_values(1); fid_s = str(finger.finger_id)
@@ -290,14 +294,15 @@ try:
                         with canvas(device) as draw:
                             draw.text((20, 20), "Hello", fill=255, font=font_large)
                             draw.text((20, 40), name, fill=255, font=font_large)
-                        time.sleep(2); current_state = "HOME"
+                        time.sleep(2); current_state = "FINGER_WAIT"
                     else:
                         with canvas(device) as draw: draw.text((10, 25), "UNKNOWN", fill=255)
-                        time.sleep(1.5); current_state = "HOME"
+                        time.sleep(1.5); current_state = "FINGER_WAIT"
                 else:
                     with canvas(device) as draw: draw.text((10, 25), "UNKNOWN", fill=255)
-                    time.sleep(1.5); current_state = "HOME"
+                    time.sleep(1.5); current_state = "FINGER_WAIT"
             update_display()
+
         time.sleep(0.05)
 except KeyboardInterrupt:
     GPIO.cleanup()

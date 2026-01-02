@@ -15,10 +15,10 @@ import sys
 import threading
 import queue
 import os
-import evdev  # For hardware RFID reading
-from evdev import InputDevice, categorize, ecodes
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 # ------------------------
 # Hardware Setup
@@ -43,20 +43,19 @@ except:
     font_large = ImageFont.load_default()
     font_enroll = ImageFont.load_default()
 
-# Assets - Using absolute paths for systemd compatibility
-def get_path(filename):
-    return os.path.join(BASE_DIR, filename)
-
+# Assets
 try:
-    rfid_img = Image.open(get_path("rfid.png")).convert("1").resize((50, 40))
-    finger_img = Image.open(get_path("fingerprint.png")).convert("1").resize((50, 40))
+    rfid_img = Image.open("rfid.png").convert("1").resize((50, 40))
+    finger_img = Image.open("fingerprint.png").convert("1").resize((50, 40))
 except:
     rfid_img = Image.new("1", (50, 40), 0)
     finger_img = Image.new("1", (50, 40), 0)
 
 # Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(get_path("credentials.json"), scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name(
+    "credentials.json", scope
+)
 client = gspread.authorize(creds)
 sheet = client.open_by_key("1TALFBN-5XfLPMo898grZZkX7oTnS08Pny-yxAAjxv-4")
 rfid_ws = sheet.worksheet("RFID")
@@ -74,154 +73,174 @@ card_id = None
 card_queue = queue.Queue()
 
 # ------------------------
-# NEW: RFID Thread using evdev
-# ------------------------
-def card_reader_thread():
-    # Using the specific device ID you found
-    dev_path = '/dev/input/by-id/usb-413d_2107-event-kbd'
-    try:
-        reader = InputDevice(dev_path)
-        print(f"Listening to RFID on: {reader.name}")
-        container = ""
-        for event in reader.read_loop():
-            if event.type == ecodes.EV_KEY:
-                data = categorize(event)
-                if data.keystate == 1: # Key Down
-                    if data.keycode == 'KEY_ENTER':
-                        if container:
-                            card_queue.put(container)
-                        container = ""
-                    else:
-                        # Extract digit/char from KEY_X string
-                        val = data.keycode.replace('KEY_', '')
-                        if len(val) == 1: container += val
-    except Exception as e:
-        print(f"RFID Thread Error: {e}")
-
-threading.Thread(target=card_reader_thread, daemon=True).start()
-
-# ------------------------
-# Logic Functions (Original)
+# Logic Functions
 # ------------------------
 def draw_loading_bar(draw, x, y, width, height, progress):
+    print("inside draw loading") 
     draw.rectangle((x, y, x + width, y + height), outline=255, fill=0)
     fill_width = int((progress / 100) * (width - 2))
     if fill_width > 0:
         draw.rectangle((x + 1, y + 1, x + fill_width, y + height - 1), outline=0, fill=255)
 
 def log_entry(scanner_type, student_id, name, grade, status="N/A"):
+    print("inside log entry") 
     now = datetime.now()
     log_ws.append_row([
-        str(student_id), scanner_type, name, grade,
-        now.strftime("%I:%M %p"), now.strftime("%m/%d/%Y"), status
+        student_id,
+        scanner_type,
+        name,
+        grade,
+        now.strftime("%I:%M %p"),
+        now.strftime("%m/%d/%Y"),
+        status  # Excused/Unexcused/N/A
     ])
 
 def print_tardy(student, absence):
+    print("inside print tardy") 
     now = datetime.now()
     date_str = now.strftime("%m/%d/%Y")
     time_str = now.strftime("%I:%M").lstrip("0")
     is_am = now.strftime("%p") == "AM"
-    try:
-        img = Image.open(get_path("tardy_slip.png")).convert("1")
-        draw = ImageDraw.Draw(img)
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-        draw.text((100, 75), student["name"], font=font, fill=0)
-        draw.text((455, 75), student["grade"], font=font, fill=0)
-        draw.text((100, 135), date_str, font=font, fill=0)
-        draw.text((385, 135), time_str, font=font, fill=0)
-        line_y = 140 if is_am else 160
-        draw.line((460, line_y, 495, line_y), fill=0, width=3)
-        if absence == "excused": draw.text((25, 320), "✓", font=font, fill=0)
-        else: draw.text((25, 340), "✓", font=font, fill=0)
-        img_rotated = img.rotate(90, expand=True).resize((580, 800))
-        p = File("/dev/usb/lp0")
-        try: p.image(img_rotated); p.cut()
-        finally: p.close()
-    except Exception as e:
-        print(f"Printer error: {e}")
+    img = Image.open("tardy_slip.png").convert("1")
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+    draw.text((100, 75), student["name"], font=font, fill=0)
+    draw.text((455, 75), student["grade"], font=font, fill=0)
+    draw.text((100, 135), date_str, font=font, fill=0)
+    draw.text((385, 135), time_str, font=font, fill=0)
+    line_y = 140 if is_am else 160
+    draw.line((460, line_y, 495, line_y), fill=0, width=3)
+    if absence == "excused": draw.text((25, 320), "✓", font=font, fill=0)
+    else: draw.text((25, 340), "✓", font=font, fill=0)
+    img_rotated = img.rotate(90, expand=True).resize((580, 800))
+    p = File("/dev/usb/lp0")
+    try: p.image(img_rotated); p.cut()
+    finally: p.close()
 
 def enroll_fingerprint():
+    print("inside enroll fingerprint") 
     target_id = None
     for slot in range(1, 128):
         if finger.load_model(slot) != OK:
             target_id = slot
             break
-    if not target_id: return
+    if not target_id:
+        return
 
+    # -------- STEP 1 --------
     while True:
         with canvas(device) as draw:
             draw.text((0, 5), f"ID: {target_id}", fill=255, font=font_enroll)
             draw.text((0, 20), "Place finger", fill=255, font=font_enroll)
             draw.text((0, 32), "for scan 1", fill=255, font=font_enroll)
-        if finger.get_image() == OK and finger.image_2_tz(1) == OK: break
-        if not GPIO.input(BTN_BACK): return
+        if finger.get_image() == OK and finger.image_2_tz(1) == OK:
+            break
+        if not GPIO.input(BTN_BACK):
+            return
 
     while finger.get_image() != NOFINGER:
         with canvas(device) as draw:
             draw.text((0, 20), "Remove finger", fill=255, font=font_enroll)
         time.sleep(0.1)
+
     time.sleep(0.5)
 
+    # -------- STEP 2 --------
     while True:
         with canvas(device) as draw:
             draw.text((0, 5), f"ID: {target_id}", fill=255, font=font_enroll)
             draw.text((0, 20), "Place SAME", fill=255, font=font_enroll)
             draw.text((0, 32), "finger again", fill=255, font=font_enroll)
-        if finger.get_image() == OK and finger.image_2_tz(2) == OK: break
-        if not GPIO.input(BTN_BACK): return
+        if finger.get_image() == OK and finger.image_2_tz(2) == OK:
+            break
+        if not GPIO.input(BTN_BACK):
+            return
 
     if finger.create_model() == OK and finger.store_model(target_id) == OK:
         finger_ws.append_row([target_id, f"Person {target_id}"])
-        with canvas(device) as draw: draw.text((20, 25), "ENROLL OK", fill=255)
+        with canvas(device) as draw:
+            draw.text((20, 25), "ENROLL OK", fill=255)
     else:
-        with canvas(device) as draw: draw.text((10, 25), "ENROLL FAIL", fill=255)
+        with canvas(device) as draw:
+            draw.text((10, 25), "ENROLL FAIL", fill=255)
+
     time.sleep(2)
 
+def card_reader_thread():
+    print("inside card reader") 
+    while True:
+        #line = sys.stdin.readline().strip()
+        line = 123123
+        if line: 
+               card_queue.put(line)
+
+threading.Thread(target=card_reader_thread, daemon=True).start()
+
 # ------------------------
-# UI Rendering (Original)
+# UI Rendering
 # ------------------------
 def update_display():
+    print("inside update display") 
     global menu_index
     with canvas(device) as draw:
         if current_state == "HOME":
             draw.text((0, 2), "SPB Front Office", fill=255, font=font_large)
             draw.line((0, 20, 128, 20), fill=255)
             s_f, s_t = (255, 0) if menu_index == 0 else (0, 255)
-            draw.rectangle((8, 28, 60, 48), outline=255, fill=s_f); draw.text((20, 33), "SETUP", fill=s_t)
+            draw.rectangle((8, 28, 60, 48), outline=255, fill=s_f)
+            draw.text((20, 33), "SETUP", fill=s_t)
             sc_f, sc_t = (255, 0) if menu_index == 1 else (0, 255)
-            draw.rectangle((68, 28, 120, 48), outline=255, fill=sc_f); draw.text((80, 33), "SCAN", fill=sc_t)
+            draw.rectangle((68, 28, 120, 48), outline=255, fill=sc_f)
+            draw.text((80, 33), "SCAN", fill=sc_t)
+
         elif current_state == "SETUP_MENU":
             draw.text((10, 2), "SETUP:", fill=255)
             l_f, l_i = (255, 0) if menu_index == 0 else (0, 255)
-            draw.rectangle((8, 18, 62, 62), outline=255, fill=l_f); draw.bitmap((10, 20), rfid_img, fill=l_i)
+            draw.rectangle((8, 18, 62, 62), outline=255, fill=l_f)
+            draw.bitmap((10, 20), rfid_img, fill=l_i)
             r_f, r_i = (255, 0) if menu_index == 1 else (0, 255)
-            draw.rectangle((66, 18, 120, 62), outline=255, fill=r_f); draw.bitmap((68, 20), finger_img, fill=r_i)
+            draw.rectangle((66, 18, 120, 62), outline=255, fill=r_f)
+            draw.bitmap((68, 20), finger_img, fill=r_i)
+
         elif current_state == "SCAN_MENU":
             draw.text((10, 2), "SCAN:", fill=255)
             l_f, l_i = (255, 0) if menu_index == 0 else (0, 255)
-            draw.rectangle((8, 18, 62, 62), outline=255, fill=l_f); draw.bitmap((10, 20), rfid_img, fill=l_i)
+            draw.rectangle((8, 18, 62, 62), outline=255, fill=l_f)
+            draw.bitmap((10, 20), rfid_img, fill=l_i)
             r_f, r_i = (255, 0) if menu_index == 1 else (0, 255)
-            draw.rectangle((66, 18, 120, 62), outline=255, fill=r_f); draw.bitmap((68, 20), finger_img, fill=r_i)
+            draw.rectangle((66, 18, 120, 62), outline=255, fill=r_f)
+            draw.bitmap((68, 20), finger_img, fill=r_i)
+
         elif current_state == "FINGER_SETUP":
             draw.text((10, 2), "FINGERPRINT SETUP", fill=255)
             n_f, n_t = (255, 0) if menu_index == 0 else (0, 255)
-            draw.rectangle((10, 20, 118, 38), outline=255, fill=n_f); draw.text((30, 25), "ENROLL NEW", fill=n_t)
+            draw.rectangle((10, 20, 118, 38), outline=255, fill=n_f)
+            draw.text((30, 25), "ENROLL NEW", fill=n_t)
             c_f, c_t = (255, 0) if menu_index == 1 else (0, 255)
-            draw.rectangle((10, 42, 118, 60), outline=255, fill=c_f); draw.text((30, 47), "CLEAR ALL", fill=c_t)
+            draw.rectangle((10, 42, 118, 60), outline=255, fill=c_f)
+            draw.text((30, 47), "CLEAR ALL", fill=c_t)
+
         elif current_state == "CONFIRM_CLEAR":
             draw.text((10, 2), "CLEAR ALL?", fill=255)
             can_f, can_t = (255, 0) if menu_index == 0 else (0, 255)
-            draw.rectangle((10, 20, 118, 38), outline=255, fill=can_f); draw.text((40, 25), "CANCEL", fill=can_t)
+            draw.rectangle((10, 20, 118, 38), outline=255, fill=can_f)
+            draw.text((40, 25), "CANCEL", fill=can_t)
             ok_f, ok_t = (255, 0) if menu_index == 1 else (0, 255)
-            draw.rectangle((10, 42, 118, 60), outline=255, fill=ok_f); draw.text((55, 47), "OK", fill=ok_t)
+            draw.rectangle((10, 42, 118, 60), outline=255, fill=ok_f)
+            draw.text((55, 47), "OK", fill=ok_t)
+
         elif current_state == "ABSENCE_MENU":
             draw.text((10, 2), "Status?", fill=255)
             e_f, e_t = (255, 0) if menu_index == 0 else (0, 255)
-            draw.rectangle((10, 15, 118, 30), outline=255, fill=e_f); draw.text((40, 18), "EXCUSED", fill=e_t)
+            draw.rectangle((10, 15, 118, 30), outline=255, fill=e_f)
+            draw.text((40, 18), "EXCUSED", fill=e_t)
             u_f, u_t = (255, 0) if menu_index == 1 else (0, 255)
-            draw.rectangle((10, 32, 118, 47), outline=255, fill=u_f); draw.text((35, 35), "UNEXCUSED", fill=u_t)
+            draw.rectangle((10, 32, 118, 47), outline=255, fill=u_f)
+            draw.text((35, 35), "UNEXCUSED", fill=u_t)
             n_f, n_t = (255, 0) if menu_index == 2 else (0, 255)
-            draw.rectangle((10, 49, 118, 64), outline=255, fill=n_f); draw.text((40, 52), "NEITHER", fill=n_t)
+            draw.rectangle((10, 49, 118, 64), outline=255, fill=n_f)
+            draw.text((40, 52), "NEITHER", fill=n_t)
+
         elif current_state in ["RFID_WAIT", "RFID_WAIT_SETUP", "FINGER_WAIT"]:
             msg = "SCAN FINGER" if current_state == "FINGER_WAIT" else "TAP CARD"
             draw.text((15, 15), msg, fill=255, font=font_large)
@@ -229,7 +248,7 @@ def update_display():
             draw_loading_bar(draw, 14, 40, 100, 8, bv)
 
 # ------------------------
-# Main Loop (Original logic with queue fix)
+# Main Loop
 # ------------------------
 update_display()
 try:
@@ -240,7 +259,7 @@ try:
             update_display(); time.sleep(0.3); continue
 
         if not GPIO.input(BTN_NEXT):
-            if current_state in ["HOME", "SETUP_MENU", "SCAN_MENU", "FINGER_SETUP", "CONFIRM_CLEAR", "ABSENCE_MENU"]:    
+            if current_state in ["HOME", "SETUP_MENU", "SCAN_MENU", "FINGER_SETUP", "CONFIRM_CLEAR", "ABSENCE_MENU"]:
                 max_opts = 3 if current_state == "ABSENCE_MENU" else 2
                 menu_index = 0 if menu_index == -1 else (menu_index + 1) % max_opts
                 last_move_time = now; update_display(); time.sleep(0.2)
@@ -264,32 +283,38 @@ try:
             elif current_state == "ABSENCE_MENU":
                 status = "N/A"
                 if menu_index == 0:
-                    print_tardy(selected_student, "excused"); status = "Excused"
+                    print_tardy(selected_student, "excused")
+                    status = "Excused"
                 elif menu_index == 1:
-                    print_tardy(selected_student, "unexcused"); status = "Unexcused"
+                    print_tardy(selected_student, "unexcused")
+                    status = "Unexcused"
                 log_entry("RFID", card_id, selected_student["name"], selected_student["grade"], status)
                 current_state = "HOME"
+            
             menu_index = -1; last_move_time = now; update_display()
 
-        # Handle RFID Queue
+        #if current_state in ["RFID_WAIT", "RFID_WAIT_SETUP", "FINGER_WAIT"]: update_display()
+
         if current_state in ["RFID_WAIT", "RFID_WAIT_SETUP"]:
             try:
                 cid = card_queue.get_nowait()
                 if current_state == "RFID_WAIT_SETUP":
-                    rfid_ws.append_row([str(cid)])
-                    with canvas(device) as draw: draw.text((10, 25), "STORED", fill=255)
+                    print (cid)
+                    rfid_ws.append_row([cid])
+                    with canvas(device) as draw:
+                        draw.text((10, 25), "STORED", fill=255)
                     time.sleep(2); current_state = "HOME"
                 else:
                     all_ids = rfid_ws.col_values(1)
-                    if str(cid) in all_ids:
-                        idx = all_ids.index(str(cid)) + 1
+                    if cid in all_ids:
+                        idx = all_ids.index(cid) + 1
                         card_id = cid
-                        selected_student = {"name": rfid_ws.cell(idx, 2).value, "grade": rfid_ws.cell(idx, 3).value}     
+                        selected_student = {"name": rfid_ws.cell(idx, 2).value, "grade": rfid_ws.cell(idx, 3).value}
                         current_state = "ABSENCE_MENU"
                     else:
                         with canvas(device) as draw: draw.text((10, 25), "UNKNOWN", fill=255)
                         time.sleep(2); current_state = "HOME"
-                update_display()
+                #update_display()
             except queue.Empty: pass
 
         if current_state == "FINGER_WAIT":
@@ -306,3 +331,6 @@ try:
         time.sleep(0.05)
 except KeyboardInterrupt:
     GPIO.cleanup()
+
+
+

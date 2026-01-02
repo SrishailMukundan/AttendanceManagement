@@ -147,7 +147,7 @@ def enroll_fingerprint():
             return
 
     if finger.create_model() == OK and finger.store_model(target_id) == OK:
-        finger_ws.append_row([target_id, f"Student {target_id}"])
+        finger_ws.append_row([target_id, f"Person {target_id}"])
         with canvas(device) as draw:
             draw.text((20, 25), "ENROLL OK", fill=255)
     else:
@@ -270,10 +270,10 @@ try:
                 status = "N/A"
                 if menu_index == 0:
                     print_tardy(selected_student, "excused")
-                    status = "excused"
+                    status = "Excused"
                 elif menu_index == 1:
                     print_tardy(selected_student, "unexcused")
-                    status = "unexcused"
+                    status = "Unexcused"
                 log_entry("RFID", card_id, selected_student["name"], selected_student["grade"], status)
                 current_state = "HOME"
             

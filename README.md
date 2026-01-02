@@ -1,4 +1,4 @@
-# Attendance Managemetn System
+# Attendance Management System
 
 A Raspberry Pi-based attendance terminal featuring RFID and Fingerprint scanning, Google Sheets integration, and thermal receipt printing.
 

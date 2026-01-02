@@ -14,6 +14,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 import sys
 import threading
 import queue
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 # ------------------------
 # Hardware Setup
@@ -40,8 +44,8 @@ except:
 
 # Assets
 try:
-    rfid_img = Image.open("/home/srishail/Downloads/rfid.png").convert("1").resize((50, 40))
-    finger_img = Image.open("/home/srishail/Downloads/fingerprint.png").convert("1").resize((50, 40))
+    rfid_img = Image.open("rfid.png").convert("1").resize((50, 40))
+    finger_img = Image.open("fingerprint.png").convert("1").resize((50, 40))
 except:
     rfid_img = Image.new("1", (50, 40), 0)
     finger_img = Image.new("1", (50, 40), 0)
@@ -49,7 +53,7 @@ except:
 # Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name(
-    "/home/srishail/Downloads/buoyant-mason-474502-f0-97e987b0933f.json", scope
+    "credentials.json", scope
 )
 client = gspread.authorize(creds)
 sheet = client.open_by_key("1TALFBN-5XfLPMo898grZZkX7oTnS08Pny-yxAAjxv-4")
@@ -92,7 +96,7 @@ def print_tardy(student, absence):
     date_str = now.strftime("%m/%d/%Y")
     time_str = now.strftime("%I:%M").lstrip("0")
     is_am = now.strftime("%p") == "AM"
-    img = Image.open("/home/srishail/Downloads/tardy_slip.png").convert("1")
+    img = Image.open("tardy_slip.png").convert("1")
     draw = ImageDraw.Draw(img)
     font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
     draw.text((100, 75), student["name"], font=font, fill=0)

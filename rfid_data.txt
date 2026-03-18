@@ -1,0 +1,5 @@
+12345678,John Doe,10
+87654321,Jane Smith,11
+23456789,Alex Patel,12
+34567890,Sarah Kim,9
+45678901,Michael Chen,10

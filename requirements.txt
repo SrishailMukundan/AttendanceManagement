@@ -1,0 +1,7 @@
+RPi.GPIO
+luma.oled
+Pillow
+python-escpos
+gspread
+oauth2client
+evdev

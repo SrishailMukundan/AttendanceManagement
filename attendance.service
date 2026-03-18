@@ -3,21 +3,23 @@ Description=Attendance Management System
 After=network.target
 
 [Service]
-# Path to your project folder
-#StandardInput=tty
-#StandardOutput=journal
-#StandardError=journal
-#TTYPath=/dev/tty1
-WorkingDirectory=/home/srishail/test/AttendanceManagement
-Environment="PATH=/home/srishail/test/AttendanceManagement/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games"
+
+# Change this to your project directory
+WorkingDirectory=/home/pi/AttendanceManagement
+
+# Virtual environment path
+Environment="PATH=/home/pi/AttendanceManagement/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 Environment="PYTHONUNBUFFERED=1"
-# Path to the python executable INSIDE your virtual environment
-ExecStart=python3 /home/srishail/test/AttendanceManagement/main.py
+
+# Main program
+ExecStart=/home/pi/AttendanceManagement/venv/bin/python /home/pi/AttendanceManagement/main.py
+
 Restart=always
 RestartSec=5
-User=srishail
-# Environment variables if needed (e.g., for display)
-Environment=PYTHONUNBUFFERED=1
+
+# User running the service
+User=pi
 
 [Install]
 WantedBy=multi-user.target

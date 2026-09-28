@@ -1,6 +1,7 @@
 # Attendance Management System
 
 A Raspberry Pi 4B-powered attendance terminal featuring 125kHz RFID card scanning, dual OLED status displays, Google Sheets cloud logging, wireless remote menu navigation, and automated thermal tardy slip printing.
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23005120.svg)](https://doi.org/10.5281/zenodo.23005120)
 
 ---
 
